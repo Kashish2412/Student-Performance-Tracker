@@ -1,14 +1,12 @@
 #include <iostream>
-#include <fstream>
 #include <iomanip>
 #include <string>
+#include <vector>
 #include <limits>
-#include <cstdint> // 
 using namespace std;
 
 // ----- COLOR FUNCTION -----
 void setColor(int color) {
-    // ANSI escape codes for colors (portable)
     switch (color) {
         case 10: cout << "\033[32m"; break; // green
         case 11: cout << "\033[36m"; break; // cyan
@@ -42,14 +40,10 @@ public:
     int getRollNo() const { return rollNo; }
     float getAverage() const { return average; }
     string getName() const { return name; }
-
-    void saveToStream(ofstream &out) const;
-    bool loadFromStream(ifstream &in);
 };
 
 // ----- INPUT -----
 void Student::input() {
-    cout << "\033[2J\033[1;1H"; // clear screen
     setColor(11);
     line('=');
     cout << ">> ENTER STUDENT DETAILS" << endl;
@@ -98,75 +92,35 @@ void Student::display() const {
     setColor(7);
 }
 
-// ----- SERIALIZATION -----
-void Student::saveToStream(ofstream &out) const {
-    out.write(reinterpret_cast<const char*>(&rollNo), sizeof(rollNo));
+// ----- GLOBAL VECTOR TO STORE STUDENTS -----
+vector<Student> students;
 
-    uint32_t nameLen = static_cast<uint32_t>(name.size());
-    out.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
-    out.write(name.c_str(), nameLen);
-
-    out.write(reinterpret_cast<const char*>(marks), sizeof(marks));
-    out.write(reinterpret_cast<const char*>(&total), sizeof(total));
-    out.write(reinterpret_cast<const char*>(&average), sizeof(average));
-    out.write(reinterpret_cast<const char*>(&grade), sizeof(grade));
-
-    uint32_t perfLen = static_cast<uint32_t>(performance.size());
-    out.write(reinterpret_cast<const char*>(&perfLen), sizeof(perfLen));
-    out.write(performance.c_str(), perfLen);
-}
-
-bool Student::loadFromStream(ifstream &in) {
-    if (!in.read(reinterpret_cast<char*>(&rollNo), sizeof(rollNo))) return false;
-
-    uint32_t nameLen = 0;
-    if (!in.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen))) return false;
-    name.resize(nameLen);
-    if (nameLen > 0) in.read(&name[0], nameLen);
-
-    if (!in.read(reinterpret_cast<char*>(marks), sizeof(marks))) return false;
-    if (!in.read(reinterpret_cast<char*>(&total), sizeof(total))) return false;
-    if (!in.read(reinterpret_cast<char*>(&average), sizeof(average))) return false;
-    if (!in.read(reinterpret_cast<char*>(&grade), sizeof(grade))) return false;
-
-    uint32_t perfLen = 0;
-    if (!in.read(reinterpret_cast<char*>(&perfLen), sizeof(perfLen))) return false;
-    performance.resize(perfLen);
-    if (perfLen > 0) in.read(&performance[0], perfLen);
-
-    return true;
-}
-
-// ----- FILE OPERATIONS -----
+// ----- ADD STUDENT -----
 void addStudent() {
-    ofstream fout("students.dat", ios::binary | ios::app);
     Student s;
     s.input();
-    s.saveToStream(fout);
-    fout.close();
+    students.push_back(s);
 
     setColor(10);
     cout << "\n✔ Student Added Successfully!\n";
     setColor(7);
-    cin.ignore();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cout << "Press Enter to continue...";
     cin.get();
 }
 
+// ----- VIEW ALL STUDENTS -----
 void viewAll() {
-    ifstream fin("students.dat", ios::binary);
-    if (!fin) {
+    if (students.empty()) {
         setColor(12);
         cout << "\n⚠ No Data Found!\n";
         setColor(7);
-        cin.ignore();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
         cout << "Press Enter to continue...";
         cin.get();
         return;
     }
 
-    Student s;
-    cout << "\033[2J\033[1;1H";
     setColor(11);
     line('=');
     cout << "📘 ALL STUDENT RECORDS" << endl;
@@ -180,26 +134,23 @@ void viewAll() {
          << setw(20) << "Performance" << endl;
     line('-');
 
-    while (s.loadFromStream(fin))
+    for (const auto& s : students)
         s.display();
 
-    fin.close();
     setColor(7);
     cout << "Press Enter to continue...";
-    cin.ignore();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cin.get();
 }
 
+// ----- SEARCH STUDENT -----
 void searchStudent() {
     int roll;
     cout << "\nEnter Roll Number to Search: ";
     cin >> roll;
 
-    ifstream fin("students.dat", ios::binary);
-    Student s;
     bool found = false;
-
-    while (s.loadFromStream(fin)) {
+    for (const auto& s : students) {
         if (s.getRollNo() == roll) {
             setColor(10);
             cout << "\n✔ Student Found:\n";
@@ -213,6 +164,7 @@ void searchStudent() {
             line('-');
             s.display();
             found = true;
+            break;
         }
     }
 
@@ -222,36 +174,29 @@ void searchStudent() {
     }
 
     setColor(7);
-    fin.close();
-    cin.ignore();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cout << "Press Enter to continue...";
     cin.get();
 }
 
+// ----- TOP PERFORMER -----
 void topPerformer() {
-    ifstream fin("students.dat", ios::binary);
-    if (!fin) {
+    if (students.empty()) {
         setColor(12);
         cout << "\n⚠ No Records Found!\n";
         setColor(7);
-        cin.ignore();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
         cout << "Press Enter to continue...";
         cin.get();
         return;
     }
 
-    Student s, top;
-    bool first = true;
-
-    while (s.loadFromStream(fin)) {
-        if (first || s.getAverage() > top.getAverage()) {
-            top = s;
-            first = false;
-        }
+    const Student* top = &students[0];
+    for (const auto& s : students) {
+        if (s.getAverage() > top->getAverage())
+            top = &s;
     }
 
-    fin.close();
-    cout << "\033[2J\033[1;1H";
     setColor(11);
     line('=');
     cout << "🏆 TOP PERFORMER" << endl;
@@ -263,10 +208,11 @@ void topPerformer() {
          << setw(8) << "Grade"
          << setw(20) << "Performance" << endl;
     line('-');
-    top.display();
+    top->display();
+
     setColor(7);
     cout << "Press Enter to continue...";
-    cin.ignore();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cin.get();
 }
 
@@ -274,7 +220,6 @@ void topPerformer() {
 int main() {
     int choice;
     do {
-        cout << "\033[2J\033[1;1H";
         setColor(3);
         line('=');
         cout << "🎓 STUDENT PERFORMANCE ANALYZER 🎓" << endl;
@@ -304,7 +249,7 @@ int main() {
                 setColor(12);
                 cout << "\n⚠ Invalid Choice! Try Again.\n";
                 setColor(7);
-                cin.ignore();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
                 cout << "Press Enter to continue...";
                 cin.get();
         }
@@ -312,4 +257,3 @@ int main() {
 
     return 0;
 }
-
